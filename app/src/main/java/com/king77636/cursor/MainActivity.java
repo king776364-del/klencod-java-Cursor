@@ -1,23 +1,19 @@
 package com.king77636.cursor;
 
+import android.app.Activity;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
-import androidx.appcompat.app.AppCompatActivity;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import java.io.IOException;
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
 
     private EditText inputPrompt;
     private TextView outputResponse;
@@ -29,10 +25,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // إنشاء الواجهة برمجياً لضمان عدم ظهور أخطاء مفقودة
-        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
-        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(32, 32, 32, 32);
 
         inputPrompt = new EditText(this);
@@ -53,68 +48,65 @@ public class MainActivity extends AppCompatActivity {
         sendButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String prompt = inputPrompt.getText().toString().trim();
+                final String prompt = inputPrompt.getText().toString().trim();
                 if (!prompt.isEmpty()) {
-                    callAI(prompt);
+                    outputResponse.setText("جاري إرسال الطلب...");
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            callAIAPI(prompt);
+                        }
+                    }).start();
                 }
             }
         });
     }
 
-    private void callAI(String userPrompt) {
-        outputResponse.setText("جاري توليد الكود والرد...");
-
-        OkHttpClient client = new OkHttpClient();
-        MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-
+    private void callAIAPI(String prompt) {
         try {
-            JSONObject jsonBody = new JSONObject();
-            jsonBody.put("model", "deepseek-coder");
-            
-            JSONArray messages = new JSONArray();
-            JSONObject message = new JSONObject();
-            message.put("role", "user");
-            message.put("content", "أنت مساعد برمجي خبير بلغة Java. اكتب الكود المطلوب بدقة: " + userPrompt);
-            messages.put(message);
-            
-            jsonBody.put("messages", messages);
+            URL url = new URL(API_URL);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json; utf-8");
+            conn.setRequestProperty("Authorization", "Bearer " + API_KEY);
+            conn.setDoOutput(true);
 
-            RequestBody body = RequestBody.create(jsonBody.toString(), JSON);
-            Request request = new Request.Builder()
-                    .url(API_URL)
-                    .header("Authorization", "Bearer " + API_KEY)
-                    .post(body)
-                    .build();
+            String jsonInputString = "{\"model\":\"deepseek-coder\",\"messages\":[{\"role\":\"user\",\"content\":\"أنت مساعد برمجي خبير بلغة Java. اكتب الكود المطلوب بدقة: " + prompt.replace("\"", "\\\"") + "\"}]}";
 
-            client.newCall(request).enqueue(new Callback() {
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonInputString.getBytes("utf-8");
+                os.write(input, 0, input.length);
+            }
+
+            int code = conn.getResponseCode();
+            BufferedReader br;
+            if (code == 200) {
+                br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "utf-8"));
+            } else {
+                br = new BufferedReader(new InputStreamReader(conn.getErrorStream(), "utf-8"));
+            }
+
+            StringBuilder response = new StringBuilder();
+            String responseLine;
+            while ((responseLine = br.readLine()) != null) {
+                response.append(responseLine.trim());
+            }
+
+            final String resultText = response.toString();
+            runOnUiThread(new Runnable() {
                 @Override
-                public void onFailure(Call call, IOException e) {
-                    runOnUiThread(() -> outputResponse.setText("خطأ في الاتصال: " + e.getMessage()));
-                }
-
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    if (response.isSuccessful()) {
-                        String responseData = response.body().string();
-                        try {
-                            JSONObject jsonResponse = new JSONObject(responseData);
-                            String result = jsonResponse.getJSONArray("choices")
-                                    .getJSONObject(0)
-                                    .getJSONObject("message")
-                                    .getString("content");
-
-                            runOnUiThread(() -> outputResponse.setText(result));
-                        } catch (Exception e) {
-                            runOnUiThread(() -> outputResponse.setText("خطأ في معالجة البيانات"));
-                        }
-                    } else {
-                        runOnUiThread(() -> outputResponse.setText("فشل الطلب من الخادم"));
-                    }
+                public void run() {
+                    outputResponse.setText(resultText);
                 }
             });
 
-        } catch (Exception e) {
-            outputResponse.setText("حدث خطأ: " + e.getMessage());
+        } catch (final Exception e) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    outputResponse.setText("خطأ: " + e.getMessage());
+                }
+            });
         }
     }
 }
