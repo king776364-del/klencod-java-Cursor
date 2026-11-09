@@ -19,6 +19,7 @@ public class MainActivity extends Activity {
     private TextView outputResponse;
     private Button sendButton;
 
+    // ضع مفتاح الـ API الخاص بك هنا (مثل DeepSeek API Key)
     private static final String API_KEY = "ضع_مفتاح_الـ_api_هنا";
     private static final String API_URL = "https://api.deepseek.com/v1/chat/completions";
 
@@ -31,7 +32,7 @@ public class MainActivity extends Activity {
         layout.setPadding(32, 32, 32, 32);
 
         inputPrompt = new EditText(this);
-        inputPrompt.setHint("اكتب طلبك هنا (مثلاً: كود Java لتحريك سيارة)");
+        inputPrompt.setHint("اكتب طلبك هنا (مثلاً: كود تحريك السيارة بالأزرار)");
         layout.addView(inputPrompt);
 
         sendButton = new Button(this);
@@ -71,7 +72,7 @@ public class MainActivity extends Activity {
             conn.setRequestProperty("Authorization", "Bearer " + API_KEY);
             conn.setDoOutput(true);
 
-            String jsonInputString = "{\"model\":\"deepseek-coder\",\"messages\":[{\"role\":\"user\",\"content\":\"أنت مساعد برمجي خبير بلغة Java. اكتب الكود المطلوب بدقة: " + prompt.replace("\"", "\\\"") + "\"}]}";
+            String jsonInputString = "{\"model\":\"deepseek-coder\",\"messages\":[{\"role\":\"user\",\"content\":\"أنت مساعد برمجي خبير بلغة Java وألعاب الأندرويد. اكتب الكود المطلوب بدقة: " + prompt.replace("\"", "\\\"") + "\"}]}";
 
             try (OutputStream os = conn.getOutputStream()) {
                 byte[] input = jsonInputString.getBytes("utf-8");
